@@ -40,7 +40,7 @@ static Node *name(Node*);
 %nonassoc	'!' ADDR UMINUS
 %nonassoc '[' '('
 
-
+%token LOCAL
 
 %%
 fich : decl
@@ -82,7 +82,8 @@ init 	: ATR INT
 
 
 args 	: args ',' param
-		 	|
+		 	| param
+			|
 		 	;
 
 param : type point_option ID
@@ -106,7 +107,7 @@ instrs : instrs instr
 instr 			: IF expres THEN instr  %prec IFX
 						| IF expres THEN instr ELSE instr
       			| DO instr WHILE expres ';'
-						| FOR lvalue IN expres to_option expres step_option DO instr // for *i
+						| FOR lvalue IN expres to_option expres step_option DO instr
 						| expres ';'
 						| body
 						| BREAK int_option ';'
@@ -133,7 +134,7 @@ lvalue  : ID
 				;
 
 expres	: lvalue
-				| INT // literal
+				| INT
 				| STR
 				| REAL
 				| lvalue INCR
@@ -158,6 +159,7 @@ expres	: lvalue
 				| expres '-' expres
 				| expres '*' expres
 				| expres '&' expres
+				| lvalue ATR expres
 				;
 
 arg_func : arg_func ',' expres
@@ -166,15 +168,53 @@ arg_func : arg_func ',' expres
 				 ;
 
 %%
-int yyerror(char *s) { printf("%s\n",s); return 1; }
-char *dupstr(const char*s) { return strdup(s); }
-int main(int argc, char *argv[]) {
- extern YYSTYPE yylval;
- int tk;
- while ((tk = yylex()))
-  if (tk > YYERRCODE)
-   printf("%d:\t%s\n", tk, yyname[tk]);
+static Node *name(Node *nm) {
+  int typ = 2, pos = 0;
+  if (!gt)
+    typ = IDfind(nm->value.s, (long*)&pos);
+  else { /* in a goto statment */
+    root = IDroot(gtr);
+    IDnew(0, nm->value.s, IDtest);
+    gtr = IDroot(root);
+    if (IDfind(nm->value.s, (long*)IDtest) < 0)
+      typ = 2; /* reference to foward label */
+    else
+      typ = IDfind(nm->value.s, (long*)&pos);
+  }
+  /* check types */
+  if (pos != 0)
+    nm = intNode(LOCAL, pos);
   else
-   printf("%d:\t%c\n", tk, tk);
- return 0;
+    nm = strNode(ADDR, nm->value.s);
+  nm->info = typ;
+  return nm;
+}
+
+static int dim(Node *n)
+{
+  if (n->type == nodeNil) return 1;
+  return n->value.i;
+}
+
+int yyerror(const char*); /* declaration may depend on yacc's version/flavor */
+char **yynames =
+#if YYDEBUG > 0
+		 (char**)yyname;
+#else
+		 0;
+#endif
+
+/* goto auxiliar functions */
+static void gtf(int typ, char *name, int attrib, int user) {
+  gtr = IDroot(root);
+  if ((typ = IDsearch(name, 0, 0, 1)) != -1 && typ != 2)
+    yyerror(strcat(strcpy(buf, name),": not a label"));
+  root = IDroot(gtr);
+}
+
+static void gotos() {
+  root = IDroot(gtr);
+  IDforall((IDfunc)gtf, 0, 0, 0);
+  IDclear();
+  gtr = IDroot(root);
 }
