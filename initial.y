@@ -40,131 +40,141 @@ static Node *name(Node*);
 %nonassoc	'!' ADDR UMINUS
 %nonassoc '[' '('
 
-%token LOCAL
+%type<n> fich decl def public_option const_option point_option type init args param body_option body params instr instrs
+%type<n> to_option step_option int_option lvalue expres arg_func
+
+
+
+%token LOCAL NIL PROG DECL IINT ISTR IREAL IID ARGS PARAM EXPRES ALLOC LVALUE LVID LVIDE POINTER BODY PARAMS TO TYPE
+%token PTR UMINUS FACTR FACTL NOT FCALL DIV MOD PLUS LT GT GE LE EQ NE SUBX NUL AND OR ATR ARG
 
 %%
-fich : decl
+/*{$$ = printNode($1, 0, yynames);}*/
+fich : decl 		 {printNode($1, 0, yynames);}
 		 ;
 
-decl : decl def
-     |
+decl : decl def  {$$ = binNode(DECL, $1, $2);}
+     | 					 {$$ = nilNode(NIL);}
 		 ;
 
-def  : public_option const_option type point_option ID init ';'
+def  : public_option const_option type point_option ID init ';' {$$ = binNode(PUBLIC, $1, binNode(CONST, $2, binNode(TYPE, $3, binNode(POINTER, $4, binNode(ID, strNode(ID, $5), $6)))));}
 		 ;
 
-public_option : PUBLIC
-     					|
+public_option : PUBLIC {$$ = nilNode(PUBLIC);}
+     					| 			 {$$ = nilNode(NIL);}
 							;
 
-const_option  : CONST
-							|
+const_option  : CONST  {$$ = nilNode(CONST);}
+							| 		   {$$ = nilNode(NIL);}
 							;
 
-point_option 	: '*'
-		  			 	|
+point_option 	: '*'    {$$ = nilNode(POINTER);}
+		  			 	| 		   {$$ = nilNode(NIL);}
 		 			 	 	;
 
-type 	: INTEGER
-			| STRING
-			| NUMBER
-			| VOID
+type 	: INTEGER 			 {$$ = nilNode(INTEGER);}
+			| STRING 				 {$$ = nilNode(STRING);}
+			| NUMBER 				 {$$ = nilNode(NUMBER);}
+			| VOID 					 {$$ = nilNode(VOID);}
 			;
 
 
-init 	: ATR INT
-		 	| ATR const_option STR
-		 	| ATR REAL
-		 	| ATR ID
-		 	| '(' args ')' body_option
-		 	|
+init 	: ATR INT   								{$$ = intNode(IINT,  $2);}
+		 	| ATR const_option STR			{$$ = strNode(ISTR,  $3);}
+		 	| ATR REAL									{$$ = realNode(IREAL,$2);}
+		 	| ATR ID										{$$ = uniNode(IID,   strNode(ID, $2));}
+		 	| '(' args ')' body_option	{$$ = binNode(IINT,  $2, $4);}
+		 	| 													{$$ = nilNode(NIL);}
 		 	;
 
 
-args 	: args ',' param
-		 	| param
-			|
+args 	: args ',' param						{$$ = binNode(ARGS, $1, $3);}
+		 	| param											{$$ = binNode(ARGS, nilNode(NIL), $1);}
+			| 													{$$ = nilNode(NIL);}
 		 	;
 
-param : type point_option ID
+//TODO string *
+param : type point_option ID      {$$ = binNode(PARAM, $1, strNode(ID, $3));}
 			;
 
-body_option : body
-						|
+body_option : body								{$$ = $1;}
+						| 										{$$ = nilNode(NIL);}
 						;
 
-body 	 : '{' params instrs '}'
+body 	 : '{' params instrs '}'		{$$ = binNode(BODY, $2, $3);}
 		 	 ;
 
-params : params param ';'
-			 |
+params : params param ';'					{$$ = binNode(PARAMS, $1, $2);}
+			 | 													{$$ = nilNode(NIL);}
 			 ;
 
-instrs : instrs instr
-			 |
+instrs : instrs instr							{$$ = binNode(PARAMS, $1, $2);}
+			 | 											    {$$ = nilNode(NIL);}
 			 ;
 
-instr 			: IF expres THEN instr  %prec IFX
-						| IF expres THEN instr ELSE instr
-      			| DO instr WHILE expres ';'
-						| FOR lvalue IN expres to_option expres step_option DO instr
-						| expres ';'
-						| body
-						| BREAK int_option ';'
-						| CONTINUE int_option ';'
-						| lvalue '#' expres ';'
+instr 			: FOR lvalue IN expres to_option expres step_option DO instr {$$ = binNode(FOR, $2, binNode(IN, $4, binNode(TO, $5, binNode(EXPRES, $6, binNode(STEP, $7, $9)))));}
+						| IF expres THEN instr  %prec IFX  {$$ = binNode(IF,      $2, 							   $4);}
+						| IF expres THEN instr ELSE instr  {$$ = binNode(ELSE,    binNode(IF, $2, $4), $6);}
+      			| DO instr WHILE expres ';'				 {$$ = binNode(DO,      $2,   						   binNode(WHILE, $2, $4));}
+						| expres ';'											 {$$ = $1;}
+						| body                             {$$ = $1;}
+						| BREAK int_option ';'						 {$$ = uniNode(BREAK,    $2);}
+						| CONTINUE int_option ';'					 {$$ = uniNode(CONTINUE, $2);}
+						| lvalue '#' expres ';'						 {$$ = binNode(ALLOC,    $1, $3);}
 						;
 
 
-to_option 	: UPTO
-          	| DOWNTO
+to_option 	: UPTO 					{$$ = nilNode(NIL);}
+          	| DOWNTO				{$$ = nilNode(NIL);}
 						;
 
-step_option : STEP expres
-						|
+step_option : STEP expres		{$$ = binNode(STEP,   nilNode(NIL), $2);}
+						| 							{$$ = nilNode(NIL);}
 						;
 
-int_option  : INT
-						|
+int_option  : INT						{$$ = intNode(INT,    $1);}
+						| 							{$$ = nilNode(NIL);}
 						;
 
-lvalue  : ID
-				| ID '[' expres ']'
-				| '*' ID
+lvalue  : ID								{$$ = uniNode(LVID,   strNode(ID, $1));}
+				| ID '[' expres ']' {$$ = binNode(LVIDE,  strNode(ID, $1), $3);}
+				| '*' ID						{$$ = uniNode(LVALUE, strNode(ID, $2));}
 				;
 
-expres	: lvalue
-				| INT
-				| STR
-				| REAL
-				| lvalue INCR
-				| lvalue DECR
-				| INCR lvalue
-				| DECR lvalue
-				| '&' lvalue %prec ADDR
-        | '-' expres %prec UMINUS
-				| '!' expres
-				| '~' expres
-        | '(' expres ')'
-			  | expres '(' arg_func ')'
-				| expres '/' expres
-				| expres '%' expres
-				| expres '+' expres
-				| expres '<' expres
-				| expres '>' expres
-				| expres GE  expres
-				| expres LE  expres
-				| expres '=' expres
-				| expres NE  expres
-				| expres '-' expres
-				| expres '*' expres
-				| expres '&' expres
-				| lvalue ATR expres
+expres	: lvalue					  {$$ = uniNode(LVALUE, $1);}
+				| INT								{$$ = intNode(INT,    $1);}
+				| STR								{$$ = strNode(STR,    $1);}
+				| REAL							{$$ = realNode(REAL,  $1);}
+				| lvalue INCR				{$$ = $1;}//TODO
+				| lvalue DECR				{$$ = $1;}//TODO
+				| INCR lvalue				{$$ = $2;}//TODO
+				| DECR lvalue				{$$ = $2;}//TODO
+				| '(' expres ')'					{$$ = $2;}
+				| '&' lvalue %prec ADDR   {$$ = uniNode(PTR,    $2);}
+        | '-' expres %prec UMINUS {$$ = uniNode(UMINUS, $2);}
+				| '!' expres							{$$ = uniNode(FACTR,  $2);}
+				| expres '!'							{$$ = uniNode(FACTL,  $1);}
+				| '~' expres							{$$ = uniNode(NOT,    $2);}
+			  | expres '(' arg_func ')' {$$ = binNode(FCALL,  $1, $3);}
+				| expres '/' expres				{$$ = binNode(DIV,  	$1, $3);}
+				| expres '%' expres				{$$ = binNode(MOD,  	$1, $3);}
+				| expres '+' expres				{$$ = binNode(PLUS, 	$1, $3);}
+				| expres '<' expres				{$$ = binNode(LT,   	$1, $3);}
+				| expres '>' expres				{$$ = binNode(GT,   	$1, $3);}
+				| expres GE  expres				{$$ = binNode(GE,   	$1, $3);}
+				| expres LE  expres				{$$ = binNode(LE,   	$1, $3);}
+				| expres '=' expres				{$$ = binNode(EQ,     $1, $3);}
+				| expres NE  expres				{$$ = binNode(NE,     $1, $3);}
+				| expres '-' expres				{$$ = binNode(SUBX,    $1, $3);}
+				| expres '*' expres				{$$ = binNode(NUL,    $1, $3);}
+				| expres '&' expres				{$$ = binNode(AND,    $1, $3);}
+				| expres '|' expres				{$$ = binNode(OR,     $1, $3);}
+				| lvalue ATR expres				{$$ = binNode(ATR,    $1, $3);}
 				;
 
-arg_func : arg_func ',' expres
-				 | expres
-				 |
+arg_func : arg_func ',' expres		{$$ = binNode(ARG, $1, $3);}
+				 | expres									{$$ = binNode(ARG, $1, nilNode(NIL));}
+				 | 												{$$ = nilNode(NIL);}
 				 ;
 
 %%
