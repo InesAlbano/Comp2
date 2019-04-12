@@ -56,6 +56,7 @@ decl : decl def  {$$ = binNode(DECL, $1, $2);}
 		 ;
 
 def  : public_option const_option type init ';' {$$ = binNode(PUBLIC, $1, binNode(CONST, $2, binNode(TYPE, $3, $4)));}
+ 		 | public_option const_option type ID ';' {$$ = binNode(PUBLIC, $1, binNode(CONST, $2, binNode(TYPE, $3, strNode(ID, $4)))); IDnew($3->info, $4, 0);}
 		 ;
 
 public_option : PUBLIC {$$ = nilNode(PUBLIC); 		$$->info = PUBLIC;}
@@ -80,8 +81,7 @@ init 	: ID ATR INT   								{$$ = binNode(INITIDINT,  strNode(ID, $1), intNode(
 		 	| ID ATR const_option STR			{$$ = binNode(INITIDSTR,  strNode(ID, $1), strNode(STR,    $4)); $$->info = STRING;}
 		 	| ID ATR REAL									{$$ = binNode(INITIDREAL, strNode(ID, $1), realNode(REAL,  $3)); $$->info = NUMBER;}
 		 	| ID ATR ID										{$$ = binNode(INITIDID,   strNode(ID, $1), strNode(ID,     $3)); $$->info = IDfind($3, 0);}
-		 	| ID '(' args ')' body_option	{$$ = binNode(INITIDAB,   strNode(ID, $1), binNode(ARGBOD, $3, $5)); $$->info = FUNCTION;}
-		 	| ID													{$$ = strNode(ID, 				$1); $$->info = 0;}
+		 	| ID '(' args ')' body_option	{$$ = binNode(INITIDAB,   strNode(ID, $1), binNode(ARGBOD, $3, $5)); IDpush();}
 		 	;
 
 
@@ -97,7 +97,7 @@ body_option : body								{$$ = $1;}
 						| 										{$$ = nilNode(NIL);}
 						;
 
-body 	 : '{' params instrs '}'		{$$ = binNode(BODY, $2, $3);}
+body 	 : '{' params instrs '}'		{$$ = binNode(BODY, $2, $3); IDpop();}
 		 	 ;
 
 params : params param ';'					{$$ = binNode(PARAMS, $1, $2);}
