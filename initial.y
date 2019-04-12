@@ -43,8 +43,6 @@ static Node *name(Node*);
 %type<n> fich decl def public_option const_option type init args param body_option body params instr instrs
 %type<n> to_option step_option int_option lvalue expres arg_func
 
-
-
 %token LOCAL NIL PROG DECL IINT ISTR IREAL IID ARGS PARAM EXPRES ALLOC LVALUE LVID LVIDE POINTER BODY PARAMS TO TYPE
 %token PTR UMINUS FACTR FACTL NOT FCALL DIV MOD PLUS LT GT GE LE EQ NE SUBX NUL AND OR ATR ARG STRINGPTR INTEGERPTR NUMBERPTR INIT PTR
 %token INITIDINT INITIDSTR INITIDREAL INITIDAB INITARGBOD INITIDID ARGBOD FUNCTION
@@ -143,22 +141,22 @@ expres	: lvalue					  			{$$ = uniNode(LVALUE, $1);}
 				| INT											{$$ = intNode(INT,    $1); $$->info = INTEGER;}
 				| STR											{$$ = strNode(STR,    $1); $$->info = STRING;}
 				| REAL										{$$ = realNode(REAL,  $1); $$->info = NUMBER;}
-				| lvalue INCR							{$$ = uniNode(INCR, $1); if($1->info != INTEGER){ yyerror("Cannot increment other element other than integer."); $$->info = INTEGER;}}
-				| lvalue DECR							{$$ = uniNode(DECR, $1); if($1->info != INTEGER){ yyerror("Cannot decrement other element other than integer."); $$->info = INTEGER;}}
-				| INCR lvalue							{$$ = uniNode(INCR, $2); if($2->info != INTEGER){ yyerror("Cannot increment other element other than integer."); $$->info = INTEGER;}}
-				| DECR lvalue							{$$ = uniNode(DECR, $2); if($2->info != INTEGER){ yyerror("Cannot decrement other element other than integer."); $$->info = INTEGER;}}
+				| lvalue INCR							{$$ = uniNode(INCR, 	$1); if($1->info == STRING){ yyerror("Cannot increment other element other than integer or reals."); $$->info = INTEGER;}}
+				| lvalue DECR							{$$ = uniNode(DECR, 	$1); if($1->info == STRING){ yyerror("Cannot decrement other element other than integer or reals."); $$->info = INTEGER;}}
+				| INCR lvalue							{$$ = uniNode(INCR, 	$2); if($2->info == STRING){ yyerror("Cannot increment other element other than integer or reals."); $$->info = INTEGER;}}
+				| DECR lvalue							{$$ = uniNode(DECR, 	$2); if($2->info == STRING){ yyerror("Cannot decrement other element other than integer or reals."); $$->info = INTEGER;}}
 				| '(' expres ')'					{$$ = $2;}
 				| '&' lvalue %prec ADDR   {$$ = uniNode(PTR,    $2);}
-        | '-' expres %prec UMINUS {$$ = uniNode(UMINUS, $2); if($2->info != INTEGER){ yyerror("Cannot make negative other element than integer"); $$->info = INTEGER;}}
-				| '!' expres							{$$ = uniNode(FACTR,  $2); if($2->info != INTEGER){ yyerror("Cannot calcuate factorial other element other than integer."); $$->info = INTEGER;}}
-				| expres '!'							{$$ = uniNode(FACTL,  $1); if($1->info != INTEGER){ yyerror("Cannot calcuate factorial other element other than integer."); $$->info = INTEGER;}}
-				| '~' expres							{$$ = uniNode(NOT,    $2);}
+        | '-' expres %prec UMINUS {$$ = uniNode(UMINUS, $2); if($2->info == STRING){ yyerror("Cannot make negative other element than integer or reals"); $$->info = INTEGER;}}
+				| '!' expres							{$$ = uniNode(FACTR,  $2); if($2->info == STRING){ yyerror("Cannot calculate factorial other element other than integer or reals."); $$->info = INTEGER;}}
+				| expres '!'							{$$ = uniNode(FACTL,  $1); if($1->info == STRING){ yyerror("Cannot calculate factorial other element other than integer or reals."); $$->info = INTEGER;}}
+				| '~' expres							{$$ = uniNode(NOT,    $2); if($2->info == STRING) { yyerror("Cannot symmetrical number of strings."); $$->info = NUMBER;}}
 			  | expres '(' arg_func ')' {$$ = binNode(FCALL,  $1, $3);}
-				| expres '/' expres				{$$ = binNode(DIV,  	$1, $3); if($1->info != INTEGER && $1->info != $3->info){ yyerror("Cannot divide two elements other than integers."); $$->info = INTEGER;}}
-				| expres '%' expres				{$$ = binNode(MOD,  	$1, $3); if($1->info != INTEGER && $1->info != $3->info){ yyerror("Cannot calculate modular of two elements other than integers."); $$->info = INTEGER;}}
-				| expres '+' expres				{$$ = binNode(PLUS, 	$1, $3); if($1->info != INTEGER && $1->info != $3->info){ yyerror("Cannot sum two elements other than integers."); $$->info = INTEGER;}}
-				| expres '-' expres				{$$ = binNode(SUBX,   $1, $3); if($1->info != INTEGER && $1->info != $3->info){ yyerror("Cannot subtract two elements other than integers."); $$->info = INTEGER;}}
-				| expres '*' expres				{$$ = binNode(NUL,    $1, $3); if($1->info != INTEGER && $1->info != $3->info){ yyerror("Cannot multiply two elements other than integers."); $$->info = INTEGER;}}
+				| expres '/' expres				{$$ = binNode(DIV,  	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot divide two elements other than integers or reals."); $$->info = INTEGER;}}
+				| expres '%' expres				{$$ = binNode(MOD,  	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot calculate modular of two elements other than integers or reals."); $$->info = INTEGER;}}
+				| expres '+' expres				{$$ = binNode(PLUS, 	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot sum two elements other than integers or reals."); $$->info = INTEGER;}}
+				| expres '-' expres				{$$ = binNode(SUBX,   $1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot subtract two elements other than integers or reals."); $$->info = INTEGER;}}
+				| expres '*' expres				{$$ = binNode(NUL,    $1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot multiply two elements other than integers or reals."); $$->info = INTEGER;}}
 				| expres '<' expres				{$$ = binNode(LT,   	$1, $3);}
 				| expres '>' expres				{$$ = binNode(GT,   	$1, $3);}
 				| expres GE  expres				{$$ = binNode(GE,   	$1, $3);}
@@ -167,7 +165,7 @@ expres	: lvalue					  			{$$ = uniNode(LVALUE, $1);}
 				| expres NE  expres				{$$ = binNode(NE,     $1, $3);}
 				| expres '&' expres				{$$ = binNode(AND,    $1, $3);}
 				| expres '|' expres				{$$ = binNode(OR,     $1, $3);}
-				| lvalue ATR expres				{$$ = binNode(ATR,    $1, $3); {if($1->info != $3->info) yyerror("Illegal arguments. Arguments must me the same type.");$$->info = $1->info;}}
+				| lvalue ATR expres				{$$ = binNode(ATR,    $1, $3);}
 				;
 
 arg_func : arg_func ',' expres		{$$ = binNode(ARG, $1, $3);}
