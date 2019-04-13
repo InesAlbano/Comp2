@@ -41,7 +41,7 @@ static Node *name(Node*);
 %nonassoc '[' '('
 
 %type<n> fich decl def public_option const_option type init args param body_option body params instr instrs
-%type<n> to_option step_option int_option lvalue expres arg_func
+%type<n> to_option step_option int_option lvalue expres arg_func init_var
 
 %token LOCAL NIL PROG DECL IINT ISTR IREAL IID ARGS PARAM EXPRES ALLOC LVALUE LVID LVIDE POINTER BODY PARAMS TO TYPE
 %token PTR UMINUS FACTR FACTL NOT FCALL DIV MOD PLUS LT GT GE LE EQ NE SUBX NUL AND OR ATR ARG STRINGPTR INTEGERPTR NUMBERPTR INIT PTR
@@ -55,8 +55,8 @@ decl : decl def  {$$ = binNode(DECL, $1, $2);}
      | 					 {$$ = nilNode(NIL);}
 		 ;
 
-def  : public_option const_option type init ';' {$$ = binNode(PUBLIC, $1, binNode(CONST, $2, binNode(TYPE, $3, $4)));}
- 		 | public_option const_option type ID ';' {$$ = binNode(PUBLIC, $1, binNode(CONST, $2, binNode(TYPE, $3, strNode(ID, $4)))); IDnew($3->info, $4, 0);}
+def  : public_option const_option init ';' 			{$$ = binNode(PUBLIC, $1, binNode(CONST, $2, $3)); /*IDnew($3->info, LEFT_CHILD($4)->value.s, 0);*/}
+ 		 | public_option const_option init_var ';' 	{$$ = binNode(PUBLIC, $1, binNode(CONST, $2, $3));}
 		 ;
 
 public_option : PUBLIC {$$ = nilNode(PUBLIC); 		$$->info = PUBLIC;}
@@ -76,13 +76,15 @@ type 	: INTEGER 			 {$$ = nilNode(INTEGER); 		$$->info = INTEGER;}
 			| VOID 					 {$$ = nilNode(VOID); 			$$->info = VOID;}
 			;
 
+init_var: type ID {$$ = binNode(TYPE, $1, strNode(ID, $2)); IDnew($1->info, $2, 0);}
+				;
 
-init 	: ID ATR INT   								{$$ = binNode(INITIDINT,  strNode(ID, $1), intNode(INT,    $3)); $$->info = INTEGER;}
-		 	| ID ATR const_option STR			{$$ = binNode(INITIDSTR,  strNode(ID, $1), strNode(STR,    $4)); $$->info = STRING;}
-		 	| ID ATR REAL									{$$ = binNode(INITIDREAL, strNode(ID, $1), realNode(REAL,  $3)); $$->info = NUMBER;}
-		 	| ID ATR ID										{$$ = binNode(INITIDID,   strNode(ID, $1), strNode(ID,     $3)); $$->info = IDfind($3, 0);}
-		 	| ID '(' args ')' body_option	{$$ = binNode(INITIDAB,   strNode(ID, $1), binNode(ARGBOD, $3, $5)); IDpush();}
-		 	;
+init 	: type ID ATR INT   								{$$ = binNode(INITIDINT,  strNode(ID, $2), intNode(INT,    $4)); IDnew($1->info, $2, 0); $$->info = INTEGER;}
+			| type ID ATR const_option STR			{$$ = binNode(INITIDSTR,  strNode(ID, $2), strNode(STR,    $5)); IDnew($1->info, $2, 0); $$->info = STRING;}
+			| type ID ATR REAL									{$$ = binNode(INITIDREAL, strNode(ID, $2), realNode(REAL,  $4)); IDnew($1->info, $2, 0); $$->info = NUMBER;}
+			| type ID ATR ID										{$$ = binNode(INITIDID,   strNode(ID, $2), strNode(ID,     $4)); IDnew($1->info, $2, 0); $$->info = IDfind($4, 0);}
+			| type ID '(' args ')' {IDnew($1->info, $2, 0);} body_option {$$ = binNode(INITIDAB,   strNode(ID, $2), binNode(ARGBOD, $4, $7));} //func
+			;
 
 
 args 	: args ',' param						{$$ = binNode(ARGS, $1, $3);}
@@ -102,6 +104,7 @@ body 	 : '{' params instrs '}'		{$$ = binNode(BODY, $2, $3); IDpop();}
 
 params : params param ';'					{$$ = binNode(PARAMS, $1, $2);}
 			 | 													{$$ = nilNode(NIL);}
+			 | error ';'								{$$ = nilNode(NIL);}
 			 ;
 
 instrs : instrs instr							{$$ = binNode(PARAMS, $1, $2);}
@@ -132,12 +135,12 @@ int_option  : INT									{$$ = intNode(INT,    $1);}
 						| 										{$$ = nilNode(NIL);}
 						;
 
-lvalue  : ID											{$$ = uniNode(LVID,   strNode(ID, $1));}
+lvalue  : ID											{$$ = uniNode(LVID,   strNode(ID, $1)); $$->info = IDfind($1, 0);}
 				| ID '[' expres ']' 			{$$ = binNode(LVIDE,  strNode(ID, $1), $3);}
 				| '*' ID									{$$ = uniNode(LVALUE, strNode(ID, $2));}
 				;
 
-expres	: lvalue					  			{$$ = uniNode(LVALUE, $1);}
+expres	: lvalue					  			{$$ = uniNode(LVALUE, $1); $$->info = $1->info;}
 				| INT											{$$ = intNode(INT,    $1); $$->info = INTEGER;}
 				| STR											{$$ = strNode(STR,    $1); $$->info = STRING;}
 				| REAL										{$$ = realNode(REAL,  $1); $$->info = NUMBER;}
@@ -146,17 +149,17 @@ expres	: lvalue					  			{$$ = uniNode(LVALUE, $1);}
 				| INCR lvalue							{$$ = uniNode(INCR, 	$2); if($2->info == STRING){ yyerror("Cannot increment other element other than integer or reals."); $$->info = INTEGER;}}
 				| DECR lvalue							{$$ = uniNode(DECR, 	$2); if($2->info == STRING){ yyerror("Cannot decrement other element other than integer or reals."); $$->info = INTEGER;}}
 				| '(' expres ')'					{$$ = $2;}
+				| expres '(' arg_func ')' {$$ = binNode(FCALL,  $1, $3);}
 				| '&' lvalue %prec ADDR   {$$ = uniNode(PTR,    $2);}
-        | '-' expres %prec UMINUS {$$ = uniNode(UMINUS, $2); if($2->info == STRING){ yyerror("Cannot make negative other element than integer or reals"); $$->info = INTEGER;}}
+				| '-' expres %prec UMINUS {$$ = uniNode(UMINUS, $2); if($2->info == STRING){ yyerror("Cannot make negative other element than integer or reals"); $$->info = INTEGER;}}
 				| '!' expres							{$$ = uniNode(FACTR,  $2); if($2->info == STRING){ yyerror("Cannot calculate factorial other element other than integer or reals."); $$->info = INTEGER;}}
 				| expres '!'							{$$ = uniNode(FACTL,  $1); if($1->info == STRING){ yyerror("Cannot calculate factorial other element other than integer or reals."); $$->info = INTEGER;}}
 				| '~' expres							{$$ = uniNode(NOT,    $2); if($2->info == STRING) { yyerror("Cannot symmetrical number of strings."); $$->info = NUMBER;}}
-			  | expres '(' arg_func ')' {$$ = binNode(FCALL,  $1, $3);}
-				| expres '/' expres				{$$ = binNode(DIV,  	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot divide two elements other than integers or reals."); $$->info = INTEGER;}}
-				| expres '%' expres				{$$ = binNode(MOD,  	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot calculate modular of two elements other than integers or reals."); $$->info = INTEGER;}}
-				| expres '+' expres				{$$ = binNode(PLUS, 	$1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot sum two elements other than integers or reals."); $$->info = INTEGER;}}
-				| expres '-' expres				{$$ = binNode(SUBX,   $1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot subtract two elements other than integers or reals."); $$->info = INTEGER;}}
-				| expres '*' expres				{$$ = binNode(NUL,    $1, $3); if($1->info == STRING && $1->info != $3->info){ yyerror("Cannot multiply two elements other than integers or reals."); $$->info = INTEGER;}}
+				| expres '/' expres				{$$ = binNode(DIV,  	$1, $3); if($1->info == STRING || $3->info == STRING) yyerror("Cannot divide two elements other than integers or reals."); $$->info = INTEGER;}
+				| expres '%' expres				{$$ = binNode(MOD,  	$1, $3); if($1->info == STRING || $3->info == STRING) yyerror("Cannot calculate modular of two elements other than integers or reals."); $$->info = INTEGER;}
+				| expres '+' expres				{$$ = binNode(PLUS, 	$1, $3); if($1->info == STRING || $3->info == STRING) yyerror("Cannot sum two elements other than integers or reals."); $$->info = INTEGER;}
+				| expres '-' expres				{$$ = binNode(SUBX,   $1, $3); if($1->info == STRING || $3->info == STRING) yyerror("Cannot subtract two elements other than integers or reals."); $$->info = INTEGER;}
+				| expres '*' expres				{$$ = binNode(NUL,    $1, $3); if($1->info == STRING || $3->info == STRING) yyerror("Cannot multiply two elements other than integers or reals."); $$->info = INTEGER;}
 				| expres '<' expres				{$$ = binNode(LT,   	$1, $3);}
 				| expres '>' expres				{$$ = binNode(GT,   	$1, $3);}
 				| expres GE  expres				{$$ = binNode(GE,   	$1, $3);}
@@ -165,7 +168,7 @@ expres	: lvalue					  			{$$ = uniNode(LVALUE, $1);}
 				| expres NE  expres				{$$ = binNode(NE,     $1, $3);}
 				| expres '&' expres				{$$ = binNode(AND,    $1, $3);}
 				| expres '|' expres				{$$ = binNode(OR,     $1, $3);}
-				| lvalue ATR expres				{$$ = binNode(ATR,    $1, $3);}
+				| lvalue ATR expres				{$$ = binNode(ATR,    $1, $3); /*IDfind($1, 0); if($1->info == VOID) yyerror("Void functions cannot have return values.");*/}
 				;
 
 arg_func : arg_func ',' expres		{$$ = binNode(ARG, $1, $3);}
